@@ -1,0 +1,28 @@
+FROM mcr.microsoft.com/dotnet/core/sdk:3.1-buster-arm64v8 AS build-env
+WORKDIR /app
+
+COPY *.csproj ./
+RUN dotnet restore
+
+COPY . ./
+RUN dotnet publish -c Debug -o out
+
+FROM arm64v8/gcc:7 AS build-env-2
+WORKDIR /app
+
+# copy .c and .h file
+COPY *.c ./
+COPY *.h ./
+
+# build
+RUN gcc -shared -o libcomWrapper.so -fPIC comWrapper.c
+
+FROM mcr.microsoft.com/dotnet/core/runtime:3.1-buster-slim-arm64v8
+WORKDIR /app
+COPY --from=build-env /app/out ./
+COPY --from=build-env-2 /app/libcomWrapper.so /usr/lib/
+
+RUN useradd -ms /bin/bash moduleuser
+USER moduleuser
+
+CMD ["dotnet", "iotedgeModbus.dll"]
